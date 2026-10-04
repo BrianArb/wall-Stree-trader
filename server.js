@@ -929,7 +929,7 @@ function getTradingClientHtml() {
 
         <!-- Right Column: Positions & History (3 cols) -->
         <section class="lg:col-span-3 flex flex-col gap-3 sm:gap-4 order-3">
-            <div class="bg-terminal-card border border-terminal-border rounded-xl p-3 sm:p-4 shadow-xl flex-1 flex flex-col min-h-[300px]">
+            <div class="bg-terminal-card border border-terminal-border rounded-xl p-3 sm:p-4 shadow-xl flex-1 flex flex-col min-h-[440px]">
                 <div class="flex justify-between items-center pb-2.5 mb-2 border-b border-terminal-border">
                     <div class="flex items-center space-x-2">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-200">Active Positions</span>
@@ -937,10 +937,11 @@ function getTradingClientHtml() {
                     </div>
                     <button id="liquidate-all-btn" class="text-[10px] text-rose-400 hover:text-rose-300 font-mono underline">Close All</button>
                 </div>
-                <div id="positions-list" class="space-y-2 overflow-y-auto flex-1 max-h-[320px] pr-1"></div>
+                <!-- Enlarged positions list container accommodating all active positions -->
+                <div id="positions-list" class="space-y-2 overflow-y-auto flex-1 min-h-[380px] max-h-[520px] pr-1"></div>
             </div>
 
-            <div class="bg-terminal-card border border-terminal-border rounded-xl p-3 sm:p-4 shadow-xl flex flex-col h-[230px]">
+            <div class="bg-terminal-card border border-terminal-border rounded-xl p-3 sm:p-4 shadow-xl flex flex-col h-[200px]">
                 <div class="flex justify-between items-center pb-2 mb-2 border-b border-terminal-border">
                     <span class="text-xs font-bold uppercase tracking-wider text-slate-200">Server Execution Log</span>
                     <span class="text-[10px] text-slate-500 font-mono">Node REST</span>
@@ -1161,10 +1162,10 @@ function getTradingClientHtml() {
                 document.getElementById('pos-count-badge').innerText = p.positions.length;
 
                 if (p.positions.length === 0) {
-                    posContainer.innerHTML = \`<div class="h-32 flex flex-col items-center justify-center text-center text-slate-500 text-xs">No active positions</div>\`;
+                    posContainer.innerHTML = \`<div class="h-36 flex flex-col items-center justify-center text-center text-slate-500 text-xs">No active positions</div>\`;
                 } else {
                     posContainer.innerHTML = p.positions.map(pos => \`
-                        <div class="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+                        <div class="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 flex items-center justify-between hover:border-slate-700 transition">
                             <div>
                                 <div class="flex items-center space-x-2">
                                     <span class="font-bold text-white text-xs font-mono cursor-pointer hover:text-terminal-accent" onclick="window.app.selectStock('\${pos.symbol}')">\${pos.symbol}</span>
@@ -1303,16 +1304,11 @@ function getTradingClientHtml() {
                 this.drawChart();
             }
 
-            /**
-             * Calculates the Exponential Moving Average (EMA) for a series
-             * Multiplier k = 2 / (period + 1)
-             */
             calculateEMA(values, period) {
                 const k = 2 / (period + 1);
                 const emaArray = new Array(values.length).fill(null);
                 if (values.length < period) return emaArray;
 
-                // Seed initial EMA with the Simple Moving Average (SMA) of the first period elements
                 let sum = 0;
                 for (let i = 0; i < period; i++) sum += values[i];
                 let prevEMA = sum / period;
@@ -1326,14 +1322,6 @@ function getTradingClientHtml() {
                 return emaArray;
             }
 
-            /**
-             * Calculates Moving Average Convergence Divergence (MACD)
-             * - Fast EMA (12 periods)
-             * - Slow EMA (26 periods)
-             * - MACD Line = Fast EMA(12) - Slow EMA(26)
-             * - Signal Line = 9-period EMA of the MACD Line (aligned by index)
-             * - Histogram = MACD Line - Signal Line
-             */
             calculateMACD(dataSeries, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
                 const prices = dataSeries.map(d => (d.price !== undefined ? d.price : d.close));
                 const len = prices.length;
@@ -1347,7 +1335,6 @@ function getTradingClientHtml() {
                     }
                 }
 
-                // Calculate 9-period signal line directly from valid MACD line values
                 const signalLine = new Array(len).fill(null);
                 const validMacdEntries = [];
                 for (let i = 0; i < len; i++) {
@@ -1360,7 +1347,6 @@ function getTradingClientHtml() {
                     const macdSubValues = validMacdEntries.map(e => e.val);
                     const kSignal = 2 / (signalPeriod + 1);
 
-                    // Seed with SMA
                     let sum = 0;
                     for (let s = 0; s < signalPeriod; s++) {
                         sum += macdSubValues[s];
@@ -1391,13 +1377,6 @@ function getTradingClientHtml() {
                 };
             }
 
-            /**
-             * Calculates 20-period Donchian Channels
-             * Formula:
-             *   Upper Channel (UC) = Highest High over previous 20 periods
-             *   Lower Channel (LC) = Lowest Low over previous 20 periods
-             *   Middle Channel (MC) = (Upper Channel + Lower Channel) / 2
-             */
             calculateDonchianChannels(dataSeries, period = 20) {
                 const len = dataSeries.length;
                 const result = new Array(len).fill(null);
