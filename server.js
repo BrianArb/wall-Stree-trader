@@ -93,6 +93,8 @@ class MarketEngine {
         this.stocks = {};
         this.newsStream = [];
         this.sseClients = new Set();
+        this.ledger = null; // Associated PortfolioLedger instance
+        this.splitCooldowns = {}; // symbol -> dayCount of last split
         this.initStocks();
         this.initNews();
         this.startLoop();
@@ -137,13 +139,14 @@ class MarketEngine {
                 },
                 sentimentBias: 0
             };
+            this.splitCooldowns[cfg.symbol] = 0;
         });
     }
 
     initNews() {
         this.newsStream = [
-            { time: "09:30 AM", text: "Opening bell rings on Wall Street. Liquidity steady across all major sectors.", symbol: "ALL", sentiment: "bull" },
-            { time: "09:28 AM", text: "High-beta quantum computing and semiconductor futures lead early volume.", symbol: "NVTX", sentiment: "bull" }
+            { id: crypto.randomUUID(), time: "09:30 AM", text: "Opening bell rings on Wall Street. Liquidity steady across all major sectors.", symbol: "ALL", sentiment: "bull" },
+            { id: crypto.randomUUID(), time: "09:28 AM", text: "High-beta quantum computing and semiconductor futures lead early volume.", symbol: "NVTX", sentiment: "bull" }
         ];
     }
 
@@ -171,7 +174,126 @@ class MarketEngine {
                 type: 'DAY_ROLL',
                 message: `Market closed. Welcome to Day ${this.dayCount}!`
             });
+
+            // Evaluate end-of-day corporate action conditions
+            this.checkAutomaticSplits();
         }
+    }
+
+    executeStockSplit(symbol, ratio) {
+        const stock = this.stocks[symbol];
+        if (!stock || !ratio || ratio <= 0 || ratio === 1) {
+            return { success: false, message: `Invalid split parameters for ${symbol}.` };
+        }
+
+        const oldPrice = stock.currentPrice;
+        const newPrice = oldPrice / ratio;
+        const isForward = ratio > 1;
+
+        // 1. Adjust Stock Market State
+        stock.currentPrice = newPrice;
+        stock.openPrice = stock.openPrice / ratio;
+        stock.dayHigh = stock.dayHigh / ratio;
+        stock.dayLow = stock.dayLow / ratio;
+
+        // 2. Adjust Historical Price Points & Candlesticks for Continuous Charting
+        stock.history.forEach(h => {
+            h.price = h.price / ratio;
+        });
+
+        stock.candles.forEach(c => {
+            c.open = c.open / ratio;
+            c.high = c.high / ratio;
+            c.low = c.low / ratio;
+            c.close = c.close / ratio;
+            c.volume = Math.round(c.volume * ratio);
+        });
+
+        const cc = stock.currentCandle;
+        cc.open = cc.open / ratio;
+        cc.high = cc.high / ratio;
+        cc.low = cc.low / ratio;
+        cc.close = cc.close / ratio;
+        cc.volume = Math.round(cc.volume * ratio);
+
+        this.splitCooldowns[symbol] = this.dayCount;
+
+        // 3. Format Corporate Action Messaging
+        const splitText = isForward
+            ? `${ratio}:1 Forward Stock Split`
+            : `1:${Math.round(1 / ratio)} Reverse Stock Split`;
+
+        const headlineText = isForward
+            ? `[CORPORATE ACTION] ${stock.name} (${symbol}) executes a ${ratio}:1 forward stock split. Price adjusted from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}.`
+            : `[CORPORATE ACTION] ${stock.name} (${symbol}) executes a 1:${Math.round(1 / ratio)} reverse stock split to maintain market compliance. Price adjusted from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}.`;
+
+        const ampm = this.hour >= 12 ? 'PM' : 'AM';
+        const displayH = this.hour > 12 ? this.hour - 12 : this.hour;
+        const padM = this.minute < 10 ? '0' + this.minute : this.minute;
+        const timeStr = `${displayH}:${padM} ${ampm}`;
+
+        const newsPayload = {
+            id: crypto.randomUUID(),
+            time: timeStr,
+            text: headlineText,
+            symbol: symbol,
+            sentiment: isForward ? 'bull' : 'bear'
+        };
+
+        this.newsStream.unshift(newsPayload);
+        if (this.newsStream.length > 30) this.newsStream.pop();
+
+        // 4. Update Portfolio Holdings (if ledger is linked)
+        let ledgerResult = null;
+        if (this.ledger) {
+            ledgerResult = this.ledger.adjustPositionForSplit(symbol, ratio, oldPrice, newPrice, splitText);
+        }
+
+        // 5. Broadcast Split to All SSE Clients
+        const splitEventData = {
+            type: 'STOCK_SPLIT',
+            symbol,
+            ratio,
+            isForward,
+            oldPrice,
+            newPrice,
+            splitText,
+            message: headlineText,
+            portfolioAdjustment: ledgerResult
+        };
+
+        this.broadcast('market_event', splitEventData);
+        this.broadcast('news_event', newsPayload);
+        this.broadcastMarketSnapshot();
+
+        return {
+            success: true,
+            symbol,
+            ratio,
+            oldPrice,
+            newPrice,
+            splitText,
+            ledgerResult
+        };
+    }
+
+    checkAutomaticSplits() {
+        Object.values(this.stocks).forEach(stock => {
+            const daysSinceLastSplit = this.dayCount - (this.splitCooldowns[stock.symbol] || 0);
+            if (daysSinceLastSplit < 2) return; // Prevent excessive splits within short horizons
+
+            // Forward Split Threshold: Stock trades over $500 (e.g., GLDC or high-momentum tech)
+            if (stock.currentPrice >= 500.00) {
+                const ratio = stock.currentPrice >= 1500 ? 5 : 2;
+                this.executeStockSplit(stock.symbol, ratio);
+            }
+            // Reverse Split Threshold: Low penny stocks under $3.00 (e.g., MEME on heavy dilution)
+            else if (stock.currentPrice <= 3.00) {
+                const reverseFactor = stock.currentPrice <= 1.00 ? 5 : 4;
+                const ratio = 1 / reverseFactor;
+                this.executeStockSplit(stock.symbol, ratio);
+            }
+        });
     }
 
     tick() {
@@ -226,6 +348,11 @@ class MarketEngine {
                 };
             }
         });
+
+        // Dynamic mid-session price checks for extreme breakouts/breakdowns
+        if (Math.random() < 0.05) {
+            this.checkAutomaticSplits();
+        }
 
         this.broadcastMarketSnapshot();
     }
@@ -320,6 +447,77 @@ class PortfolioLedger {
         this.wins = 0;
         this.losses = 0;
         this.tradeCount = 0;
+    }
+
+    adjustPositionForSplit(symbol, ratio, oldPrice, newPrice, splitDescription) {
+        const pos = this.positions[symbol];
+        if (!pos) {
+            return { affected: false, message: `No active position in ${symbol} during split.` };
+        }
+
+        const oldShares = pos.shares;
+        const oldAvgPrice = pos.avgPrice;
+        const exactNewShares = oldShares * ratio;
+        const isForward = ratio > 1;
+
+        let wholeShares = 0;
+        let cashInLieu = 0;
+
+        if (isForward) {
+            wholeShares = Math.round(exactNewShares);
+            pos.shares = wholeShares;
+            pos.avgPrice = oldAvgPrice / ratio;
+            pos.totalCost = pos.shares * pos.avgPrice;
+        } else {
+            // Reverse Split: Fractional share converted to cash-in-lieu
+            wholeShares = Math.floor(exactNewShares);
+            const fractionalShare = exactNewShares - wholeShares;
+
+            if (fractionalShare > 0) {
+                cashInLieu = fractionalShare * newPrice;
+                if (pos.type === 'LONG') {
+                    this.cash += cashInLieu;
+                } else {
+                    // For short position, buyback liability reduced for fractional share
+                    this.cash -= cashInLieu;
+                }
+            }
+
+            if (wholeShares > 0) {
+                pos.shares = wholeShares;
+                pos.avgPrice = oldAvgPrice / ratio;
+                pos.totalCost = pos.shares * pos.avgPrice;
+            } else {
+                // Entire position liquidated through cash-in-lieu
+                delete this.positions[symbol];
+            }
+        }
+
+        // Record Corporate Action in Execution Ledger
+        const actionType = isForward ? 'SPLIT' : 'REV_SPLIT';
+        this.transactions.unshift({
+            id: crypto.randomUUID(),
+            type: actionType,
+            symbol: symbol,
+            qty: wholeShares,
+            price: newPrice,
+            total: wholeShares * newPrice,
+            pnl: cashInLieu > 0 ? parseFloat(cashInLieu.toFixed(2)) : null,
+            timestamp: new Date().toLocaleTimeString()
+        });
+        if (this.transactions.length > 40) this.transactions.pop();
+
+        return {
+            affected: true,
+            symbol,
+            type: pos ? pos.type : 'CLOSED',
+            oldShares,
+            newShares: wholeShares,
+            oldAvgPrice,
+            newAvgPrice: oldAvgPrice / ratio,
+            cashInLieu: cashInLieu > 0 ? parseFloat(cashInLieu.toFixed(2)) : 0,
+            splitDescription
+        };
     }
 
     executeOrder(action, symbol, qty, currentPrice) {
@@ -523,6 +721,7 @@ class PortfolioLedger {
 
 const market = new MarketEngine();
 const ledger = new PortfolioLedger(25000);
+market.ledger = ledger; // Link ledger for corporate action reconciliation
 
 function parseJsonBody(req) {
     return new Promise((resolve, reject) => {
@@ -624,6 +823,35 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Explicit Stock Split Endpoint (for automated or testing triggers)
+    if (pathname === '/api/split' && req.method === 'POST') {
+        try {
+            const body = await parseJsonBody(req);
+            const { symbol, ratio } = body;
+            const parsedRatio = parseFloat(ratio);
+
+            if (!symbol || !market.stocks[symbol]) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: `Invalid or missing stock symbol: ${symbol}` }));
+                return;
+            }
+
+            if (!parsedRatio || parsedRatio <= 0 || parsedRatio === 1) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Split ratio must be a positive number different from 1 (e.g. 2 for 2:1, 0.25 for 1:4).' }));
+                return;
+            }
+
+            const splitResult = market.executeStockSplit(symbol, parsedRatio);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, ...splitResult, portfolio: ledger.getSummary(market.stocks) }));
+        } catch (err) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: err.message }));
+        }
+        return;
+    }
+
     if (pathname === '/api/speed' && req.method === 'POST') {
         try {
             const body = await parseJsonBody(req);
@@ -685,7 +913,7 @@ server.listen(PORT, () => {
     console.log(`=======================================================`);
     console.log(`🚀 QUANT TRADER PRO - Node.js Financial Simulation`);
     console.log(`📡 Server active at: http://localhost:${PORT}`);
-    console.log(`⚡ Live SSE Feed & REST API initialized.`);
+    console.log(`⚡ Live SSE Feed, Stock Splits & REST API initialized.`);
     console.log(`=======================================================`);
 });
 
@@ -761,6 +989,9 @@ function getTradingClientHtml() {
                 </div>
                 <button id="sound-btn" class="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs flex items-center gap-1">
                     <span id="sound-icon">🔊</span>
+                </button>
+                <button id="trigger-split-btn" class="px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800/60 text-amber-300 text-xs font-mono transition" title="Trigger Stock Split">
+                    ✂️ Split
                 </button>
                 <button id="reset-game-btn" class="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 text-xs font-medium transition">
                     Restart
@@ -937,7 +1168,6 @@ function getTradingClientHtml() {
                     </div>
                     <button id="liquidate-all-btn" class="text-[10px] text-rose-400 hover:text-rose-300 font-mono underline">Close All</button>
                 </div>
-                <!-- Enlarged positions list container accommodating all active positions -->
                 <div id="positions-list" class="space-y-2 overflow-y-auto flex-1 min-h-[380px] max-h-[520px] pr-1"></div>
             </div>
 
@@ -998,6 +1228,20 @@ function getTradingClientHtml() {
                 osc.connect(gain); gain.connect(this.ctx.destination);
                 osc.start(now); osc.stop(now + 0.25);
             }
+            playSplit() {
+                if (!this.enabled) return; this.init(); if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.1);
+                osc.frequency.setValueAtTime(880, now + 0.2);
+                gain.gain.setValueAtTime(0.09, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.45);
+            }
             playWarning() {
                 if (!this.enabled) return; this.init(); if (!this.ctx) return;
                 const now = this.ctx.currentTime;
@@ -1022,8 +1266,8 @@ function getTradingClientHtml() {
                 this.chartMode = 'line';
                 this.showSMA = true;
                 this.showVolume = true;
-                this.showDonchian = true; // 20-period Donchian Channels toggle
-                this.showMACD = true; // MACD (12, 26, 9) oscillator toggle
+                this.showDonchian = true;
+                this.showMACD = true;
                 this.portfolio = null;
                 this.news = [];
 
@@ -1057,6 +1301,17 @@ function getTradingClientHtml() {
                     if (this.news.length > 25) this.news.pop();
                     this.renderNews();
                     this.showToast(\`📰 NEWS: \${newsItem.text.slice(0, 60)}...\`, newsItem.sentiment === 'bull' ? 'success' : 'warning');
+                });
+
+                this.eventSource.addEventListener('market_event', (e) => {
+                    const eventData = JSON.parse(e.data);
+                    if (eventData.type === 'STOCK_SPLIT') {
+                        sfx.playSplit();
+                        this.showToast(\`✂️ \${eventData.splitText}: \${eventData.symbol} adjusted to $\${eventData.newPrice.toFixed(2)}\`, 'info');
+                        this.fetchPortfolio();
+                    } else if (eventData.type === 'DAY_ROLL') {
+                        this.showToast(eventData.message, 'info');
+                    }
                 });
 
                 this.eventSource.onerror = () => {
@@ -1130,6 +1385,31 @@ function getTradingClientHtml() {
                 }
             }
 
+            async triggerManualSplit() {
+                const stock = this.stocks[this.selectedSymbol];
+                if (!stock) return;
+                
+                // If stock is above $60, do a 2-for-1 forward split; otherwise, do a 1-for-2 reverse split
+                const ratio = stock.price > 60 ? 2 : 0.5;
+                try {
+                    const res = await fetch('/api/split', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ symbol: this.selectedSymbol, ratio })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        sfx.playSplit();
+                        this.showToast(\`Manual Split Applied: \${data.splitText} for \${this.selectedSymbol}\`, 'success');
+                        this.fetchPortfolio();
+                    } else {
+                        this.showToast(data.message, 'error');
+                    }
+                } catch (err) {
+                    this.showToast('Failed to trigger split', 'error');
+                }
+            }
+
             renderPortfolio() {
                 if (!this.portfolio) return;
                 const p = this.portfolio;
@@ -1154,7 +1434,6 @@ function getTradingClientHtml() {
                 document.getElementById('stat-winrate').innerText = \`\${p.winRate}%\`;
                 document.getElementById('stat-tradecount').innerText = p.tradeCount;
 
-                // Update rank
                 this.updateRank(p.netWorth);
 
                 // Positions List
@@ -1189,19 +1468,23 @@ function getTradingClientHtml() {
                 if (p.transactions.length === 0) {
                     histContainer.innerHTML = \`<div class="text-slate-500 text-center py-6">No executed orders</div>\`;
                 } else {
-                    histContainer.innerHTML = p.transactions.map(item => \`
-                        <div class="p-1.5 rounded bg-slate-900/60 border border-slate-800 flex items-center justify-between text-[11px]">
-                            <div class="flex items-center space-x-1.5">
-                                <span class="font-bold text-white">\${item.type}</span>
-                                <span class="text-terminal-accent font-semibold">\${item.symbol}</span>
-                                <span class="text-slate-400">x\${item.qty}</span>
+                    histContainer.innerHTML = p.transactions.map(item => {
+                        const isSplit = item.type === 'SPLIT' || item.type === 'REV_SPLIT';
+                        const badgeColor = isSplit ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300';
+                        return \`
+                            <div class="p-1.5 rounded bg-slate-900/60 border border-slate-800 flex items-center justify-between text-[11px]">
+                                <div class="flex items-center space-x-1.5">
+                                    <span class="font-bold text-[10px] px-1 py-0.2 rounded \${badgeColor}">\${item.type}</span>
+                                    <span class="text-terminal-accent font-semibold">\${item.symbol}</span>
+                                    <span class="text-slate-400">x\${item.qty}</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-slate-200">$\${item.price.toFixed(2)}</span>
+                                    \${item.pnl !== null ? \`<span class="ml-1 text-[10px] font-bold text-amber-400">($\${item.pnl.toFixed(2)})</span>\` : ''}
+                                </div>
                             </div>
-                            <div class="text-right">
-                                <span class="text-slate-200">$\${item.price.toFixed(2)}</span>
-                                \${item.pnl !== null ? \`<span class="ml-1 text-[10px] font-bold \${item.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">(\${item.pnl >= 0 ? '+' : ''}$\${item.pnl.toFixed(2)})</span>\` : ''}
-                            </div>
-                        </div>
-                    \`).join('');
+                        \`;
+                    }).join('');
                 }
             }
 
@@ -1593,7 +1876,7 @@ function getTradingClientHtml() {
                     ctx.stroke();
                 }
 
-                // 20-Period Donchian Channels (Upper, Lower, and Centerline)
+                // Donchian Channels
                 const sourceData = (this.chartMode === 'candle' && stock.candles && stock.candles.length >= 20)
                     ? stock.candles
                     : stock.history;
@@ -1602,7 +1885,6 @@ function getTradingClientHtml() {
                     const dcValues = this.calculateDonchianChannels(sourceData, 20);
                     const count = sourceData.length;
 
-                    // 1. Shaded Channel Fill between Upper and Lower bands
                     ctx.beginPath();
                     let firstUpper = true;
                     for (let i = 0; i < count; i++) {
@@ -1621,7 +1903,7 @@ function getTradingClientHtml() {
                     ctx.fillStyle = 'rgba(245, 158, 11, 0.07)';
                     ctx.fill();
 
-                    // 2. Upper Channel Band (Resistance)
+                    // Upper Band
                     ctx.beginPath();
                     ctx.lineWidth = 1.2;
                     ctx.strokeStyle = '#f59e0b';
@@ -1634,7 +1916,7 @@ function getTradingClientHtml() {
                     }
                     ctx.stroke();
 
-                    // 3. Lower Channel Band (Support)
+                    // Lower Band
                     ctx.beginPath();
                     ctx.lineWidth = 1.2;
                     ctx.strokeStyle = '#f59e0b';
@@ -1647,7 +1929,7 @@ function getTradingClientHtml() {
                     }
                     ctx.stroke();
 
-                    // 4. Middle Channel Line (Median / Trend Bias)
+                    // Middle Line
                     ctx.beginPath();
                     ctx.lineWidth = 1;
                     ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)';
@@ -1663,17 +1945,15 @@ function getTradingClientHtml() {
                     ctx.setLineDash([]);
                 }
 
+                // MACD Sub-panel
                 if (this.showMACD && sourceData && sourceData.length >= 26) {
                     const macdData = this.calculateMACD(sourceData, 12, 26, 9);
                     const macdTop = padding.top + chartHeight + 18;
-                    const macdBottom = macdTop + macdPaneHeight;
                     const count = sourceData.length;
 
-                    // Sub-panel background
                     ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
                     ctx.fillRect(padding.left, macdTop, chartWidth, macdPaneHeight);
 
-                    // Divider boundary
                     ctx.strokeStyle = '#334155';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
@@ -1681,7 +1961,6 @@ function getTradingClientHtml() {
                     ctx.lineTo(width - padding.right, macdTop - 6);
                     ctx.stroke();
 
-                    // Find MACD min/max bounds across valid points
                     let minMACD = -0.05, maxMACD = 0.05;
                     for (let i = 0; i < count; i++) {
                         if (macdData.macdLine[i] !== null) {
@@ -1726,7 +2005,7 @@ function getTradingClientHtml() {
                         }
                     }
 
-                    // MACD Line (12-EMA - 26-EMA Difference) in Cyan
+                    // MACD Line
                     ctx.beginPath();
                     ctx.lineWidth = 1.75;
                     ctx.strokeStyle = '#38bdf8';
@@ -1740,7 +2019,7 @@ function getTradingClientHtml() {
                     }
                     ctx.stroke();
 
-                    // Signal Line (9-period EMA) in Amber/Orange
+                    // Signal Line
                     ctx.beginPath();
                     ctx.lineWidth = 1.5;
                     ctx.strokeStyle = '#f59e0b';
@@ -1754,7 +2033,6 @@ function getTradingClientHtml() {
                     }
                     ctx.stroke();
 
-                    // Latest Readings & Labels
                     const lastIdx = count - 1;
                     const lastDiff = macdData.macdLine[lastIdx];
                     const lastFast = macdData.emaFast[lastIdx];
@@ -1779,7 +2057,6 @@ function getTradingClientHtml() {
                         }
                     }
 
-                    // Zero label on right gutter
                     ctx.fillStyle = '#64748b';
                     ctx.textAlign = 'left';
                     ctx.fillText('0.00', width - padding.right + 6, zeroY + 3);
@@ -1857,6 +2134,11 @@ function getTradingClientHtml() {
                 soundBtn.addEventListener('click', () => {
                     sfx.enabled = !sfx.enabled;
                     document.getElementById('sound-icon').innerText = sfx.enabled ? '🔊' : '🔇';
+                });
+
+                // Manual Split Button
+                document.getElementById('trigger-split-btn').addEventListener('click', () => {
+                    this.triggerManualSplit();
                 });
 
                 // Chart modes
