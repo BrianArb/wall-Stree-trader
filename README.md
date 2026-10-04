@@ -1,377 +1,338 @@
 # 📈 QuantTrader Pro — Wall Street Trading Simulator
 
-A real-time, interactive stock trading simulator and financial sandbox built entirely in Node.js with zero external dependencies. Features dynamic price simulation via Geometric Brownian Motion, long and short execution with margin collateral checks, dynamic breaking-news catalysts, and real-time technical indicators (SMA, 20-period Donchian Channels, and MACD 12/26/9) rendered on an HTML5 Canvas.
+A high-performance, real-time stock market simulation and quantitative financial sandbox built entirely in Node.js with **zero external dependencies**. 
+
+The platform features continuous Geometric Brownian Motion stochastic price modeling, live order routing (long equity and margin short-selling), automated corporate actions (forward splits and reverse splits with fractional cash-in-lieu accounting), breaking news sentiment catalysts, and real-time canvas-rendered quantitative indicators including 20-period Donchian Channels, 15-period SMA, and a full MACD (12, 26, 9) momentum oscillator.
+
+---
 
 ## 📑 Table of Contents
 
-* [Key Features](#-key-features)
-
-* [Quick Start](#-quick-start)
-
-* [Asset Directory](#-asset-directory)
-
-* [Quantitative & Mathematical Models](#-quantitative--mathematical-models)
-
-  * [Price Dynamics (Geometric Brownian Motion)](#1-price-dynamics-geometric-brownian-motion)
-
-  * [20-Period Donchian Channels](#2-20-period-donchian-channels)
-
-  * [Moving Average Convergence Divergence (MACD)](#3-moving-average-convergence-divergence-macd)
-
-* [Trading Mechanics](#-trading-mechanics)
-
-  * [Long Positions](#long-positions)
-
-  * [Short Selling & Margin Requirements](#short-selling--margin-requirements)
-
-  * [Trader Rank Progression](#trader-rank-progression)
-
-* [API Reference](#-api-reference)
-
-  * [Server-Sent Events (SSE)](#server-sent-events-sse)
-
+* [⚡ Key Features](#-key-features)
+* [🚀 Quick Start](#-quick-start)
+* [📊 Asset Directory](#-asset-directory)
+* [📐 Quantitative & Mathematical Models](#-quantitative--mathematical-models)
+  * [1. Stochastic Price Dynamics (GBM)](#1-stochastic-price-dynamics-gbm)
+  * [2. Corporate Actions & Stock Split Normalization](#2-corporate-actions--stock-split-normalization)
+  * [3. 20-Period Donchian Channels](#3-20-period-donchian-channels)
+  * [4. Moving Average Convergence Divergence (MACD 12/26/9)](#4-moving-average-convergence-divergence-macd-12269)
+* [💼 Trading Mechanics & Risk Rules](#-trading-mechanics--risk-rules)
+  * [Long Orders](#long-orders)
+  * [Short Selling & Margin Collateral](#short-selling--margin-collateral)
+  * [Corporate Action Position Reconciliation](#corporate-action-position-reconciliation)
+  * [Trader Career Milestones](#trader-career-milestones)
+* [🔌 Complete API Reference](#-complete-api-reference)
+  * [Server-Sent Events (SSE) Feed](#server-sent-events-sse-feed)
   * [REST Endpoints](#rest-endpoints)
+* [🏗️ Project Architecture](#️-project-architecture)
+* [📄 License](#-license)
 
-* [Project Architecture](#-project-architecture)
-
-* [License](#-license)
+---
 
 ## ⚡ Key Features
 
-* **Zero-Dependency Node.js Backend**: Built strictly using Node.js core modules (`http`, `url`, `crypto`). No `npm install` or third-party packages required.
+* **Zero-Dependency Engine**: Built strictly upon native Node.js core modules (`http`, `url`, `crypto`). Runs out of the box without requiring `npm install` or third-party packages.
+* **Full-Duplex Real-Time Architecture**: Continuous market ticks, corporate action notices, and news headlines streamed to connected frontends using **Server-Sent Events (SSE)**.
+* **Autonomous Corporate Action Engine**:
+  * **Dynamic Trigger Conditions**: Automatically executes forward splits on breakout stocks trading above $\$500.00$ and reverse splits on penny equities slipping below $\$3.00$ to maintain exchange compliance.
+  * **Historical Continuum Preservation**: Retroactively scales price history and candlestick bars by the split ratio $R$ to prevent artificial visual chart cliffs and indicator distortions.
+  * **Portfolio Reconciliation & Cash-in-Lieu**: Recomputes active share counts, cost basis, and collateral while liquidating fractional shares into available cash.
+* **Quantitative HTML5 Canvas Terminal**:
+  * Real-time switching between glowing Area Trend Lines and Japanese Candlestick bars with volume overlays.
+  * Overlaid 15-period Simple Moving Average ($\text{SMA}_{15}$) and 20-period Donchian Channel breakout bands.
+  * Dedicated zero-centered MACD oscillator sub-panel featuring 12-EMA, 26-EMA differential lines, 9-EMA signal line, and color-coded momentum histogram bars.
+* **Procedural Acoustic Design**: Native Web Audio API sound synthesis generates immediate auditory feedback for filled orders, margin stop alerts, and corporate actions.
 
-* **Full-Duplex Architecture**: Real-time tick data and news broadcasts streamed via **Server-Sent Events (SSE)**, with low-latency REST endpoints handling trade dispatch and execution.
-
-* **Custom HTML5 Canvas Engine**:
-
-  * Switch between high-resolution glowing Area Line charts and Japanese Candlesticks.
-
-  * Interactive crosshairs and hovering value inspection tooltips.
-
-  * Sub-second volume histogram overlay.
-
-  * Real-time indicator overlays with zero third-party charting libraries.
-
-* **Advanced Technical Indicators**:
-
-  * **15-Period SMA** (Simple Moving Average).
-
-  * **20-Period Donchian Channels** (Upper Resistance, Lower Support, and Median Baseline).
-
-  * **MACD Oscillator Sub-panel** (12-EMA, 26-EMA, MACD Line, 9-EMA Signal Line, and zero-centered Histogram bars).
-
-* **Comprehensive Order Desk**:
-
-  * Buy (Long), Sell (Close Long), Short (Borrow on 50% margin), and Cover (Close Short).
-
-  * Percentage-based sizing buttons (25%, 50%, 75%, MAX).
-
-  * Instant portfolio-wide liquidation button.
-
-* **Synthesized Web Audio API FX**: Interactive auditory feedback for order execution and catalyst alerts generated procedurally in the browser.
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-
-* [Node.js](https://nodejs.org/) version 16.0 or higher.
+* [Node.js](https://nodejs.org/) (v16.0.0 or higher recommended).
 
 ### Running the Application
 
-1. Clone or download `server.js` into your project directory.
+1. Clone or download the project files into a directory containing `server.js`.
+2. Launch the server from your terminal:
+   ```bash
+   node server.js
+   ```
+3. Open your web browser and navigate to:
+   ```
+   http://localhost:3000
+   ```
+4. Adjust simulation speed ($0\times$, $1\times$, $2\times$, or $5\times$) using the header controls, or trigger manual test splits via the **✂️ Split** button.
 
-2. Launch the server directly:
+---
 
-```
-node server.js
+## 📊 Asset Directory
 
-```
+The market engine maintains 6 distinct equities representing diverse volatility profiles, sectors, and beta coefficients:
 
-3. Open your browser and navigate to:
+| Ticker | Company Name | Sector | Baseline Price | Base Vol ($\sigma$) | Drift ($\mu$) | Beta ($\beta$) | Description |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **`NVTX`** | NovaTech AI | Tech & Semiconductors | $\$142.50$ | $0.022$ | $+0.0004$ | $2.2$ | High-beta artificial intelligence & chipmaker. |
+| **`GLDC`** | Goldcorp Trust | Commodities & Metals | $\$1,850.00$ | $0.007$ | $+0.0001$ | $0.5$ | Defensive hedge asset with low volatility and high baseline price. |
+| **`PHRM`** | BioNova Labs | Biotechnology | $\$48.20$ | $0.035$ | $+0.0002$ | $1.8$ | Binary catalyst stock sensitive to FDA trial clinical headlines. |
+| **`MEME`** | RocketMoon Corp | Consumer & Retail | $\$18.75$ | $0.045$ | $-0.0001$ | $3.5$ | Hyper-volatile retail favorite subject to retail pumps and dilution. |
+| **`CYBR`** | Aegis Cyber | Cloud & Defense | $\$215.40$ | $0.012$ | $+0.0003$ | $0.9$ | Stable enterprise cybersecurity contractor. |
+| **`COIN`** | Satoshi Ledger | Crypto Assets | $\$64.80$ | $0.038$ | $+0.0005$ | $2.8$ | High-beta digital asset infrastructure play. |
 
-```
-http://localhost:3000
-
-```
-
-## 🏢 Asset Directory
-
-The simulated exchange features six assets across divergent market sectors, each configured with unique volatility ($\sigma$), drift ($\mu$), and market beta ($\beta$):
-
-| Ticker | Company / Asset | Sector | Base Price | Beta ($\beta$) | Volatility Profile | 
-| ----- | ----- | ----- | ----- | ----- | ----- | 
-| **`NVTX`** | NovaTech AI | Tech & Semiconductors | \$142.50 | 2.2 | High beta; explosive rallies and sharp corrections. | 
-| **`GLDC`** | Goldcorp Trust | Commodities & Precious Metals | \$1,850.00 | 0.5 | Defensive safe haven asset; low daily volatility. | 
-| **`PHRM`** | BioNova Labs | Biotechnology | \$48.20 | 1.8 | Catalyst-driven swings from clinical trials and FDA alerts. | 
-| **`MEME`** | RocketMoon Corp | Consumer & Retail | \$18.75 | 3.5 | Extreme volatility driven by social sentiment and short squeezes. | 
-| **`CYBR`** | Aegis Cyber | Cloud Security & Defense | \$215.40 | 0.9 | Steady institutional compounder with moderate swings. | 
-| **`COIN`** | Satoshi Ledger | Digital Assets & Crypto | \$64.80 | 2.8 | Highly responsive to liquidity news and speculative volume. | 
+---
 
 ## 📐 Quantitative & Mathematical Models
 
-### 1. Price Dynamics (Geometric Brownian Motion)
+### 1. Stochastic Price Dynamics (GBM)
 
-Prices evolve every tick using a discretized Geometric Brownian Motion (GBM) model with an exponential catalyst decay factor:
+Asset prices evolve discretely according to a Geometric Brownian Motion (GBM) model augmented with headline sentiment bias:
 
 $$
-S_{t+\Delta t} = S_t \times (1 + \mu \Delta t + \sigma Z \sqrt{\Delta t} + C_t)
+S_{t + \Delta t} = S_t \times \left(1 + \mu \Delta t + \sigma Z \sqrt{\Delta t} + C_t\right)
 $$
 
 Where:
-
-* $S_t$: Stock price at time $t$
-
-* $\mu$: Asset drift parameter
-
-* $\sigma$: Base asset volatility
-
-* $Z$: Standard normal random variable generated via the Box-Muller transform:
-  
-
+* $S_t$ is the current asset spot price.
+* $\mu$ represents the baseline drift rate.
+* $\sigma$ is the asset volatility coefficient.
+* $Z \sim \mathcal{N}(0, 1)$ is a standard Gaussian random variable generated via the **Box-Muller Transform**:
   $$
-  Z = \sqrt{-2 \ln(u_1)} \cos(2\pi u_2), \quad u_1, u_2 \sim U(0, 1)
+  Z = \sqrt{-2 \ln(u_1)} \cos(2\pi u_2), \quad u_1, u_2 \in (0, 1]
+  $$
+* $C_t$ is the decaying catalyst sentiment bias. Following any market or stock-specific headline, the sentiment decays exponentially each tick:
+  $$
+  C_{t + \Delta t} = C_t \times \lambda, \quad \lambda = 0.93
   $$
 
-* $C_t$: Breaking news catalyst shock, decaying geometrically each tick:
-  
+---
 
+### 2. Corporate Actions & Stock Split Normalization
+
+When a corporate action executes with split ratio $R$ ($R > 1$ represents a forward split like $2:1$ or $5:1$, while $0 < R < 1$ represents a reverse split like $1:4$ where $R = 0.25$):
+
+#### A. Spot & Historical Market Normalization
+To prevent price discontinuities from creating false indicator signals (such as artificial gaps in moving averages or Donchian bands), all past prices and candles are normalized:
+
+$$
+P_{\text{new}} = \frac{P_{\text{old}}}{R}
+$$
+
+$$
+\text{Open}' = \frac{\text{Open}}{R}, \quad \text{High}' = \frac{\text{High}}{R}, \quad \text{Low}' = \frac{\text{Low}}{R}, \quad \text{Close}' = \frac{\text{Close}}{R}
+$$
+
+$$
+\text{Volume}' = \text{Volume} \times R
+$$
+
+#### B. Portfolio Position & Cost Basis Adjustment
+For any open long or short position:
+
+$$
+N_{\text{exact}} = N_{\text{old}} \times R
+$$
+
+$$
+\text{AvgPrice}_{\text{new}} = \frac{\text{AvgPrice}_{\text{old}}}{R}
+$$
+
+* **Forward Splits ($R > 1$)**: Whole shares are rounded ($N_{\text{new}} = \text{round}(N_{\text{exact}})$).
+* **Reverse Splits ($R < 1$)**: Share counts are truncated to integer units ($N_{\text{new}} = \lfloor N_{\text{exact}} \rfloor$), and fractional shares are liquidated via cash-in-lieu:
   $$
-  C_{t+1} = C_t \times 0.93
+  \text{Fraction} = N_{\text{exact}} - N_{\text{new}}
+  $$
+  $$
+  \text{Cash-in-Lieu} = \text{Fraction} \times P_{\text{new}}
+  $$
+  For long positions, this amount is credited to cash balances. For short positions, the buyback liability is credited accordingly.
+
+---
+
+### 3. 20-Period Donchian Channels
+
+The 20-period Donchian Channel tracks dynamic breakout volatility boundaries over a 20-period window:
+
+$$
+\text{Upper Channel}_t = \max\left(\text{High}_t, \text{High}_{t-1}, \dots, \text{High}_{t-19}\right)
+$$
+
+$$
+\text{Lower Channel}_t = \min\left(\text{Low}_t, \text{Low}_{t-1}, \dots, \text{Low}_{t-19}\right)
+$$
+
+$$
+\text{Middle Channel}_t = \frac{\text{Upper Channel}_t + \text{Lower Channel}_t}{2}
+$$
+
+Breakouts above $\text{Upper Channel}_t$ signal institutional upward momentum, while breakdowns below $\text{Lower Channel}_t$ identify support failures.
+
+---
+
+### 4. Moving Average Convergence Divergence (MACD 12/26/9)
+
+The MACD measures momentum shifts by evaluating the convergence and divergence of short-term and medium-term exponential moving averages.
+
+1. **Exponential Moving Averages**:
+   For any series $P$ and period $k$, the smoothing weight is $\alpha = \frac{2}{k + 1}$:
+   $$
+   \text{EMA}_k(t) = \alpha P_t + (1 - \alpha) \text{EMA}_k(t-1)
+   $$
+   * Fast Smoothing Factor ($k = 12$): $\alpha_{12} = \frac{2}{13} \approx 0.1538$
+   * Slow Smoothing Factor ($k = 26$): $\alpha_{26} = \frac{2}{27} \approx 0.0741$
+
+2. **MACD Difference Line**:
+   $$
+   \text{MACD}_t = \text{EMA}_{12}(t) - \text{EMA}_{26}(t)
+   $$
+
+3. **Signal Line (9-Period EMA of MACD)**:
+   $$
+   \text{Signal}_t = \text{EMA}_9(\text{MACD})_t, \quad \alpha_9 = \frac{2}{10} = 0.20
+   $$
+
+4. **MACD Histogram**:
+   $$
+   \text{Histogram}_t = \text{MACD}_t - \text{Signal}_t
+   $$
+
+---
+
+## 💼 Trading Mechanics & Risk Rules
+
+### Long Orders
+* **Buying**: Deducts $\text{Cost} = \text{Shares} \times P_{\text{market}}$ from available cash. If a position already exists, the average cost basis recalculates as:
+  $$
+  \text{AvgPrice}_{\text{blended}} = \frac{\text{TotalCost}_{\text{existing}} + \text{Cost}_{\text{order}}}{N_{\text{existing}} + N_{\text{order}}}
+  $$
+* **Selling**: Liquidates shares at market bid, adds proceeds to cash, and records realized profit/loss:
+  $$
+  \text{P\&L} = (\text{Price}_{\text{sell}} - \text{AvgPrice}) \times \text{Shares}_{\text{sold}}
   $$
 
-### 2. 20-Period Donchian Channels
-
-Donchian Channels identify market breakouts, relative volatility, and range boundaries across a 20-period lookback window:
-
-* **Upper Channel (Resistance)**:
-  
-
+### Short Selling & Margin Collateral
+* **Shorting**: Traders can short sell shares they do not own to profit from falling prices.
+* **Collateral Requirement**: Opening a short position requires a $50\%$ cash margin deposit:
   $$
-  \text{UC}_t = \max(P_t, P_{t-1}, \dots, P_{t-19})
+  \text{Margin Required} = 0.50 \times (\text{Shares} \times P_{\text{market}})
   $$
-
-* **Lower Channel (Support)**:
-  
-
+* **Covering**: Buys back borrowed shares to close liability. Realized profit is calculated as:
   $$
-  \text{LC}_t = \min(P_t, P_{t-1}, \dots, P_{t-19})
+  \text{P\&L}_{\text{short}} = (\text{AvgPrice}_{\text{short}} - \text{Price}_{\text{cover}}) \times \text{Shares}_{\text{covered}}
   $$
 
-* **Middle Channel (Median Trend Line)**:
-  
+### Trader Career Milestones
 
-  $$
-  \text{MC}_t = \frac{\text{UC}_t + \text{LC}_t}{2}
-  $$
+Your trading tier updates dynamically based on total account net worth:
 
-### 3. Moving Average Convergence Divergence (MACD)
+| Tier Title | Net Worth Target | Privilege / Description |
+| :--- | :---: | :--- |
+| **Retail Amateur** | $\$25,000$ | Baseline starting seed capital. |
+| **Pattern Day Trader** | $\$50,000$ | Unlocks high-velocity intraday trading clearance. |
+| **Senior Quantitative Trader** | $\$100,000$ | Recognized institutional execution consistency. |
+| **Hedge Fund Partner** | $\$500,000$ | Large-scale portfolio allocation capabilities. |
+| **Wall Street Titan** | $\$1,000,000+$ | Peak trader status; $40\times$ baseline seed return. |
 
-The MACD tracks momentum and trend divergence using Exponential Moving Averages (EMA):
+---
 
-1. **Multiplier Formulation**:
-   
+## 🔌 Complete API Reference
 
-   $$
-   k = \frac{2}{N + 1}
-   $$
-
-   * For $N = 12$ (Fast): $k_{12} \approx 0.1538$
-
-   * For $N = 26$ (Slow): $k_{26} \approx 0.0741$
-
-   * For $N = 9$ (Signal): $k_9 = 0.2000$
-
-2. **EMA Calculation**:
-   
-
-   $$
-   \text{EMA}_t = (P_t \times k) + (\text{EMA}_{t-1} \times (1 - k))
-   $$
-
-3. **MACD Line**:
-   
-
-   $$
-   \text{MACD Line}_t = \text{EMA}_{12}(P)_t - \text{EMA}_{26}(P)_t
-   $$
-
-4. **Signal Line**:
-   
-
-   $$
-   \text{Signal Line}_t = \text{EMA}_9(\text{MACD Line})_t
-   $$
-
-5. **MACD Histogram**:
-   
-
-   $$
-   \text{Histogram}_t = \text{MACD Line}_t - \text{Signal Line}_t
-   $$
-
-## 💼 Trading Mechanics
-
-Traders start with **\$25,000.00** in seed capital.
-
-### Long Positions
-
-* **BUY**: Purchases shares using available cash. Reduces cash by $\text{Shares} \times P$.
-
-* **SELL**: Sells owned shares at market price. Realized profit or loss ($(\text{Sale Price} - \text{Average Cost}) \times \text{Shares}$) is permanently credited to the cash balance.
-
-### Short Selling & Margin Requirements
-
-* **SHORT**: Borrows shares to sell immediately at market price, expecting the price to drop.
-
-  * **Margin Collateral Requirement**: The trader must maintain at least **50% of the total order value** in liquid cash:
-    
-
-    $$
-    \text{Cash Balance} \ge 0.50 \times (\text{Shares} \times P)
-    $$
-
-* **COVER**: Repurchases the borrowed shares to close out the short position.
-
-  * Realized profit is calculated inversely:
-    
-
-    $$
-    \text{PnL} = (\text{Borrow Price} - \text{Repurchase Price}) \times \text{Shares}
-    $$
-
-### Trader Rank Progression
-
-As your total net worth ($\text{Cash} + \text{Invested Value}$) compounds, your trading status updates automatically:
-
-| Rank Tier | Capital Requirement | Status | 
-| ----- | ----- | ----- | 
-| **Retail Amateur** | Starting Capital (\$25,000) | Default tier | 
-| **Pattern Day Trader** | \$50,000 | Unlocked margin capabilities | 
-| **Senior Quantitative Trader** | \$100,000 | Advanced algorithmic momentum | 
-| **Prop Desk Director** | \$250,000 | Institutional tier | 
-| **Hedge Fund Partner** | \$500,000 | Elite liquidity provider | 
-| **Wall Street Titan** | \$1,000,000+ | Legendary status | 
-
-## 🔌 API Reference
-
-### Server-Sent Events (SSE)
+### Server-Sent Events (SSE) Feed
 
 #### `GET /api/stream`
+Establishes a persistent SSE connection. Pushes real-time stream frames every second.
 
-Establishes a continuous, persistent text/event-stream connection.
+**Event Types Dispatched:**
+* `init`: Pushes complete market state snapshot and clock upon connection.
+* `tick`: Broadcasts latest asset prices, OHLC candlestick aggregates, and market clock.
+* `news_event`: Broadcasts breaking news headlines and affected ticker sentiment.
+* `market_event`: Dispatches corporate action notices:
+  * `STOCK_SPLIT`: Broadcasts split factor, adjusted pricing, and portfolio adjustments.
+  * `DAY_ROLL`: Broadcasts 4:00 PM session closing and roll to next trading day.
 
-**Events Broadcasted:**
-
-* `init`: Full market snapshot sent upon initial connection.
-
-* `tick`: Sub-second market snapshot containing price updates, clock data, and candlestick records.
-
-* `news_event`: Emitted when breaking news shifts asset sentiment.
-
-* `market_event`: Emitted at daily close (`16:00`) for day rolls.
+---
 
 ### REST Endpoints
 
 #### `POST /api/trade`
-
 Submits an execution order.
 
-**Request Payload:**
+* **Request Body:**
+  ```json
+  {
+    "action": "BUY",
+    "symbol": "NVTX",
+    "qty": 50
+  }
+  ```
+  *(Supported actions: `"BUY"`, `"SELL"`, `"SHORT"`, `"COVER"`)*
+* **Response (Success `200`):**
+  ```json
+  {
+    "success": true,
+    "message": "Bought 50 shares of NVTX at $142.50",
+    "portfolio": { ... }
+  }
+  ```
 
-```
-{
-  "action": "BUY",
-  "symbol": "NVTX",
-  "qty": 25
-}
+#### `POST /api/split`
+Executes an explicit forward or reverse stock split across the engine and ledger.
 
-```
-
-*Valid `action` values: `BUY`, `SELL`, `SHORT`, `COVER`.*
-
-**Response (200 OK):**
-
-```
-{
-  "success": true,
-  "message": "Bought 25 shares of NVTX at $142.50",
-  "portfolio": { ... }
-}
-
-```
+* **Request Body:**
+  ```json
+  {
+    "symbol": "NVTX",
+    "ratio": 2.0
+  }
+  ```
+  *(Use `ratio > 1` for forward splits like `2.0` or `5.0`; use `0 < ratio < 1` for reverse splits like `0.25` for $1:4$)*
+* **Response (Success `200`):**
+  ```json
+  {
+    "success": true,
+    "symbol": "NVTX",
+    "ratio": 2,
+    "oldPrice": 142.50,
+    "newPrice": 71.25,
+    "splitText": "2:1 Forward Stock Split",
+    "portfolio": { ... }
+  }
+  ```
 
 #### `GET /api/portfolio`
-
-Returns current financial metrics, open positions, drawdown, and transaction logs.
-
-**Response (200 OK):**
-
-```
-{
-  "cash": 21437.50,
-  "investedValue": 3562.50,
-  "netWorth": 25000.00,
-  "unrealizedPnL": 0.00,
-  "returnPercent": 0.00,
-  "peakNetWorth": 25000.00,
-  "maxDrawdown": "0.0",
-  "tradeCount": 1,
-  "winRate": "100.0",
-  "positions": [
-    {
-      "symbol": "NVTX",
-      "type": "LONG",
-      "shares": 25,
-      "avgPrice": 142.50,
-      "totalCost": 3562.50,
-      "currentPrice": 142.50,
-      "unrealizedPnL": 0.00
-    }
-  ],
-  "transactions": [ ... ]
-}
-
-```
+Returns current financial metrics, open positions, drawdown, and transaction history.
 
 #### `GET /api/news`
-
-Fetches the active historical ledger of recent news catalysts.
+Returns the recent catalyst feed array.
 
 #### `POST /api/speed`
-
-Adjusts the simulation clock rate.
-
-**Request Payload:**
-
-```
-{ "speed": 2 }
-
-```
-
-*Valid `speed` values: `0` (pause), `1` (1x), `2` (2x), `5` (5x).*
+Controls the simulation speed clock.
+* **Request Body:** `{"speed": 1}` *(Allowed values: `0` [pause], `1`, `2`, `5`)*
 
 #### `POST /api/liquidate`
-
-Market-sells all active long positions and covers all open short positions immediately.
+Instantly closes all active long and short positions at current market prices.
 
 #### `POST /api/reset`
+Resets the simulation, stocks, news stream, and cash back to $\$25,000.00$.
 
-Restores seed capital to \$25,000.00 and clears all positions, history, and news.
+---
 
 ## 🏗️ Project Architecture
 
 ```
-.
-└── server.js
-    ├── MarketEngine          # Geometric Brownian Motion, candle aggregation, and clock loop
-    ├── PortfolioLedger       # Margin checks, order validation, PnL accounting
-    ├── HTTP Server Router    # SSE stream handler + REST endpoint controllers
-    └── getTradingClientHtml  # Embedded single-page application (Tailwind + Canvas UI)
-
+quant-trader-pro/
+├── server.js               # Unified backend: HTTP server, SSE broadcaster,
+│                           # MarketEngine, PortfolioLedger, and Embedded UI
+├── index.html              # Standalone client simulator (alternative browser build)
+├── game_description.md    # Promotional, store, and game overview documentation
+└── README.md               # Technical documentation and mathematical models
 ```
 
-The entire system is intentionally packaged as an independent, single-file deployment. The frontend client is served directly from the root route (`/`) and establishes a persistent SSE connection back to the host instance.
+### Server Subsystem Breakdown (`server.js`)
+* **`MarketEngine`**: Manages continuous price generation, stochastic Gaussian shocks, candlestick generation, news catalyst injection, clock advancement, and automated corporate split evaluations.
+* **`PortfolioLedger`**: Maintains cash balances, order fills, long/short margins, position accounting, cash-in-lieu disbursements, win-rate calculations, and max drawdown tracking.
+* **`getTradingClientHtml()`**: Delivers the self-contained, responsive Tailwind CSS trading terminal with high-frequency HTML5 Canvas rendering and Web Audio synthesis.
+
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License. Feel free to modify, extend, and deploy for educational and personal use.
+This project is open-source under the [MIT License](https://opensource.org/licenses/MIT). You are free to modify, distribute, and expand upon the engine for educational, analytical, and gaming purposes.
